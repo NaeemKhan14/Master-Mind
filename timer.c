@@ -579,15 +579,23 @@ int *input(int length, int numRange) {
 }
 
 int compare( int * secret, int *inp, int length){
-  
+
   int result = 0, correctNumber = 0, positionMatch = 0;
   int x, y;
   int visitedMatch[length];
   // WARNING: USE CALLOC (OR MAYBE REALLOC)
+  // This array is used as a flag, so we set all the values to 0
   for( x = 0; x < length; x++) {
     visitedMatch[x] = 0;
   }
-  
+  /*
+   * First loop goes through each input numbers. Second loop goes
+   * through all the elements of secret array and checks if the
+   * input value is in it. If it is, it sets the flag for that
+   * position to 1 so we never check that value again and finishes
+   * the loop. And we also check that if the input value matched is
+   * at the same position as it is in the secret array.
+   */
   for(x = 0; x < length; x++) {
     for(y = 0; y < length; y++) {
       if ((inp[x] == secret[y]) && (visitedMatch[y] == 0)) {
@@ -601,12 +609,15 @@ int compare( int * secret, int *inp, int length){
 
   printf("Total correct Matches = %d\n", correctNumber);
   printf("Total correct positions = %d\n", positionMatch);
-  
+  /* If correct guesses at correct positions are the same as number
+   * of length, that means we have guessed all the colors correctly.
+   * So in that csae, result is set to 1 to be returned.
+   */
   (positionMatch == length) ? result = 1 : 0;
 
   return result;
 }
-  
+
 
 /* Main ----------------------------------------------------------------------------- */
 int main (void)
