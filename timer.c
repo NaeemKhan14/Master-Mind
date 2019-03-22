@@ -591,14 +591,19 @@ int compare( int * secret, int *inp, int length){
   for(x = 0; x < length; x++) {
     for(y = 0; y < length; y++) {
       if ((inp[x] == secret[y]) && (visitedMatch[y] == 0)) {
-        correctNumber++;
+        if(x == y) { positionMatch++; }
+	correctNumber++;
         visitedMatch[y] = 1;
         break;
       }
     }
   }
-  
+
   printf("Total correct Matches = %d\n", correctNumber);
+  printf("Total correct positions = %d\n", positionMatch);
+  
+  (positionMatch == length) ? result = 1 : 0;
+
   return result;
 }
   
