@@ -577,30 +577,30 @@ int *input(int length, int numRange) {
   
   return guess;
 }
-void compare( int * secret, int *inp, int length){
+
+int compare( int * secret, int *inp, int length){
   
-//find same colours
-int x,y,colours=0,matches=0;
+  int result = 0, correctNumber = 0, positionMatch = 0;
+  int x, y;
+  int visitedMatch[length];
+  // WARNING: USE CALLOC (OR MAYBE REALLOC)
+  for( x = 0; x < length; x++) {
+    visitedMatch[x] = 0;
+  }
+  
   for(x = 0; x < length; x++) {
-    if(secret[x] == inp[x]) {
-      matches++;
-      secret[x]=0;
-      inp[x]=0;
-    }
-  }
-    for(x = 0; x < length; x++) {
-    for(y=0; y<length;y++){
-      if(secret[y] == inp[x]) {
-        if(inp[x]!=0){
-        colours++;
-        secret[y]=0;
-      }
+    for(y = 0; y < length; y++) {
+      if ((inp[x] == secret[y]) && (visitedMatch[y] == 0)) {
+        correctNumber++;
+        visitedMatch[y] = 1;
+        break;
       }
     }
   }
   
-printf("matches=%d  colours=%d\n",matches , colours);
-  }
+  printf("Total correct Matches = %d\n", correctNumber);
+  return result;
+}
   
 
 /* Main ----------------------------------------------------------------------------- */
@@ -671,35 +671,32 @@ int main (void)
   
   while (success != 1) {
     
-  int *inp = input(length, numRange);
-  
-  char *resultString = malloc(length * sizeof(char));
-  
-  for(j = 0; j < length; j++) {
-    char tempChar[2];
-    sprintf(tempChar, "%d", inp[j]);
-    tempChar[1] = '\0';
-    strcat(resultString, tempChar);
-    strcat(resultString, " ");
-  }
-  int x;
-  
-  for(x = 0; x < length; x++) {
-    if(secret[x] != inp[x]) {
-      LCDmain("Incorrect Seq", resultString);
-      compare(secret,inp,length);
+    int *inp = input(length, numRange);
+    
+    char *resultString = malloc(length * sizeof(char));
+    
+    for(j = 0; j < length; j++) {
+      char tempChar[2];
+      sprintf(tempChar, "%d", inp[j]);
+      tempChar[1] = '\0';
+      strcat(resultString, tempChar);
+      strcat(resultString, " ");
+    }
+    int x;
+    
+    int result = compare(secret, inp, length);
+    
+    if(result == 1) {
+      success = 1;
+      delay(3000);
+      LCDmain("Correct Seq", resultString);
+      delay(3000);
+      LCDmain("Success", "Pattern Match");
       break;
     }
-    if(x==length-1){
-      LCDmain("Correct Seq", resultString);
-      success=1;
-    }
-  }
   
-  delay(3000);
-   LCDmain("Correct Seq", resultString);
-     delay(3000);
-   LCDmain("Success", "Pattern Match");
+    LCDmain("Incorrect Seq", resultString);
+    delay(3000);
   }
 }
 
