@@ -22,8 +22,8 @@
 // =======================================================
 // Tunables
 // PINs (based on BCM numbering)
-#define LED 5
-#define LEDr 13
+#define LED 13
+#define LEDR 5
 #define BUTTON 19
 // delay for loop iterations (mainly), in ms
 #define DELAY 200
@@ -521,7 +521,7 @@ void delay (unsigned int howLong)
 }
 
 int *input(int length, int numRange) {
-  int pinLED = LED, pinButton = BUTTON,pinLEDr = LEDr;
+  int pinLED = LED, pinButton = BUTTON,pinLEDR = LEDR;
   int fSel, shift, pin,  clrOff, setOff, off;
   int y,x,j;
   int *guess = malloc(length * sizeof(int));
@@ -563,18 +563,18 @@ int *input(int length, int numRange) {
     }
     for(y=0; y<count; y++) {
       setOff = 7; // GPSET0 for pin 23
-      *(gpio + setOff) = 1 << (LEDr & 31) ;
+      *(gpio + setOff) = 1 << (LEDR & 31) ;
       delay(300);
       clrOff = 10; // GPCLR0 for pin 23
-      *(gpio + clrOff) = 1 << (LEDr & 31) ;
+      *(gpio + clrOff) = 1 << (LEDR & 31) ;
       delay(300);
     }
-  
+
 }
 // Clean up: write LOW
 
   *(gpio + 7) = 1 << (23 & 31) ;
-  
+
   return guess;
 }
 
@@ -582,38 +582,54 @@ int compare( int * secret, int *inp, int length){
 
   int result = 0, correctNumber = 0, positionMatch = 0;
   int x, y;
-  int visitedMatch[length];
-  // WARNING: USE CALLOC (OR MAYBE REALLOC)
-  // This array is used as a flag, so we set all the values to 0
-  for( x = 0; x < length; x++) {
-    visitedMatch[x] = 0;
+  int forgetSecret[length];
+  int forgetInput[length];
+
+  for(x = 0; x < length; x++) {
+	forgetSecret[x] = 0;
+	forgetInput[x] = 0;
   }
   /*
-   * First loop goes through each input numbers. Second loop goes
-   * through all the elements of secret array and checks if the
-   * input value is in it. If it is, it sets the flag for that
-   * position to 1 so we never check that value again and finishes
-   * the loop. And we also check that if the input value matched is
-   * at the same position as it is in the secret array.
+   * Visit x'th index of both input and secret arrays and mark the
+   * values that match. That is the correct guessed values which
+   * are at the right index in the array. We mark it to be never
+   * used again.
+   */
+  for( x = 0; x < length; x++) {
+    if(inp[x] == secret[x]) {
+      positionMatch++;
+      forgetSecret[x] = forgetInput[x] = 1;
+    }
+  }
+  /*
+   * First we check if the x is an index we didn't visit before.
+   * If it isn't, we search for that value in the secret array.
+   * If the value is matched and it wasn't marked before, the
+   * program increments the correctMatches counter and sets a 
+   * flag that no other values should be taken into account for
+   * x'th element from input array.
    */
   for(x = 0; x < length; x++) {
-    for(y = 0; y < length; y++) {
-      if ((inp[x] == secret[y]) && (visitedMatch[y] == 0)) {
-        if(x == y) { positionMatch++; }
-	correctNumber++;
-        visitedMatch[y] = 1;
-        break;
+    if(!forgetInput[x]) {
+      int found = 0;
+
+      for(y = 0; y < length; y++) {
+        if ((secret[y] == inp[x]) && !forgetSecret[y]) {
+          if (!found) {
+	    correctNumber++;
+	    found = 1;
+	  }
+          forgetSecret[y] = 1;
+        }
       }
     }
   }
-
   printf("Total correct Matches = %d\n", correctNumber);
   printf("Total correct positions = %d\n", positionMatch);
   /* If correct guesses at correct positions are the same as number
    * of length, that means we have guessed all the colors correctly.
    * So in that csae, result is set to 1 to be returned.
    */
-  (positionMatch == length) ? result = 1 : 0;
 
   return result;
 }
@@ -622,7 +638,7 @@ int compare( int * secret, int *inp, int length){
 /* Main ----------------------------------------------------------------------------- */
 int main (void)
 {
-  int pinLED = LED, pinButton = BUTTON,pinLEDr = LEDr;
+  int pinLED = LED, pinButton = BUTTON,pinLEDR = LEDR;
   int fSel, shift, pin,  clrOff, setOff, off, fd,j;
   int theValue, thePin;
   unsigned int howLong = DELAY;
@@ -677,20 +693,21 @@ int main (void)
   srand(randSeed);
   printf("Secret: ");
   int secret[length];
+
   for(j = 0; j < length; j++) {
     secret[j]=rand()%numRange+1;
     printf("%d\t", secret[j]);
-  }  
+  }
   printf("\nStart pressing the button\n");
-  
-  int success = 0;
-  
+
+  int success = 0, tries = 0;
+
   while (success != 1) {
-    
+
     int *inp = input(length, numRange);
-    
-    char *resultString = malloc(length * sizeof(char));
-    
+
+    char *resultString = malloc(10 + length * sizeof(char));
+
     for(j = 0; j < length; j++) {
       char tempChar[2];
       sprintf(tempChar, "%d", inp[j]);
@@ -699,18 +716,14 @@ int main (void)
       strcat(resultString, " ");
     }
     int x;
-    
+
     int result = compare(secret, inp, length);
-    
     if(result == 1) {
       success = 1;
-      delay(3000);
-      LCDmain("Correct Seq", resultString);
-      delay(3000);
-      LCDmain("Success", "Pattern Match");
+      LCDmain("Success", "Correct Seq");
       break;
     }
-  
+    
     LCDmain("Incorrect Seq", resultString);
     delay(3000);
   }
