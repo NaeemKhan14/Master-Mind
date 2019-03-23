@@ -578,16 +578,17 @@ int *input(int length, int numRange) {
   return guess;
 }
 
-int compare( int * secret, int *inp, int length){
+int *compare( int * secret, int *inp, int length){
 
-  int result = 0, correctNumber = 0, positionMatch = 0;
+  static int result[3]; // FIX LATER
+  int correctNumber = 0, positionMatch = 0;
   int x, y;
   int forgetSecret[length];
   int forgetInput[length];
 
   for(x = 0; x < length; x++) {
-	forgetSecret[x] = 0;
-	forgetInput[x] = 0;
+    forgetSecret[x] = 0;
+    forgetInput[x] = 0;
   }
   /*
    * Visit x'th index of both input and secret arrays and mark the
@@ -616,9 +617,9 @@ int compare( int * secret, int *inp, int length){
       for(y = 0; y < length; y++) {
         if ((secret[y] == inp[x]) && !forgetSecret[y]) {
           if (!found) {
-	    correctNumber++;
-	    found = 1;
-	  }
+            correctNumber++;
+            found = 1;
+          }
           forgetSecret[y] = 1;
         }
       }
@@ -628,15 +629,26 @@ int compare( int * secret, int *inp, int length){
   printf("Total correct positions = %d\n", positionMatch);
   /* If correct guesses at correct positions are the same as number
    * of length, that means we have guessed all the colors correctly.
-   * So in that csae, result is set to 1 to be returned.
+   * So in that csae, result[0] is set to 1 to be returned.
    */
-
+  (positionMatch == length) ? result[0] = 1 : 0;
+  
+  result[1] = positionMatch;
+  result[2] = correctNumber;
+   
   return result;
 }
 
+char *intToChar(int value) {
 
+  static char tempString[2]; // FIX LATER
+  sprintf(tempString, "%d", value);
+  tempString[1] = '\0';
+
+  return tempString;
+}
 /* Main ----------------------------------------------------------------------------- */
-int main (void)
+int main (int argc, char **argv)
 {
   int pinLED = LED, pinButton = BUTTON,pinLEDR = LEDR;
   int fSel, shift, pin,  clrOff, setOff, off, fd,j;
@@ -681,50 +693,73 @@ int main (void)
   *(gpio + fSel) = *(gpio + fSel) & ~(7 << shift); // Sets bits to one = output
 
   // -----------------------------------------------------------------------------
+  // Initial Welcome screen
   LCDmain("Master Mind", "");
   int length, numRange, random;
+  // Take length and range from user
   printf("Please enter the length\n");
   scanf("%d", &length);
   
   printf("Please enter the numRange\n");
   scanf("%d", &numRange);
   
+  /*
+   * We are using uninitialized integer as seed for random because this
+   * will point to a random location in the memory everytime, so our
+   * secret sequence will be unique every time. 
+   */
   int randSeed;
   srand(randSeed);
-  printf("Secret: ");
   int secret[length];
-
+  
   for(j = 0; j < length; j++) {
     secret[j]=rand()%numRange+1;
-    printf("%d\t", secret[j]);
+    // If debug mode param is present, display secret
+    if(argc == 2 && argv[1][0] == 'd') {
+      if(j == 0) { printf("Secret: "); }
+      printf("%d\t", secret[j]);
+    }
   }
   printf("\nStart pressing the button\n");
 
   int success = 0, tries = 0;
-
+  // Keep running the loop until termination flag is received.
   while (success != 1) {
 
     int *inp = input(length, numRange);
 
-    char *resultString = malloc(10 + length * sizeof(char));
-
+    char resultStringTop[13] = "";
+    tries++;
+    
+    // Compile the string for the top line of LCD 
+    int *result = compare(secret, inp, length);
+    
+    strcat(resultStringTop, "Guess ");
+    strcat(resultStringTop, intToChar(tries));
+    strcat(resultStringTop, ": ");
+    strcat(resultStringTop, intToChar(result[1]));
+    strcat(resultStringTop, " ");
+    strcat(resultStringTop, intToChar(result[2]));
+    resultStringTop[12] = '\0';
+    
+    // Compile the string for the bottom line of LCD
+    char *resultStringBottom = malloc(length * sizeof(char));
+  
     for(j = 0; j < length; j++) {
-      char tempChar[2];
-      sprintf(tempChar, "%d", inp[j]);
-      tempChar[1] = '\0';
-      strcat(resultString, tempChar);
-      strcat(resultString, " ");
+      strcat(resultStringBottom, intToChar(inp[j]));
+      strcat(resultStringBottom, " ");
     }
-    int x;
-
-    int result = compare(secret, inp, length);
-    if(result == 1) {
+    
+    if(result[0] == 1) {
       success = 1;
-      LCDmain("Success", "Correct Seq");
+      LCDmain(resultStringTop, resultStringBottom);
+      delay(3000);
+      LCDmain("Success!", "Seq Complete");
+      printf("Game finished in %d attempts\n", tries);
       break;
     }
     
-    LCDmain("Incorrect Seq", resultString);
+    LCDmain(resultStringTop, resultStringBottom);
     delay(3000);
   }
 }
