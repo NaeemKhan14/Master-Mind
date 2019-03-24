@@ -16,8 +16,8 @@
 #include <sys/wait.h>
 #include <sys/ioctl.h>
 
-#define LEDR 13
-#define LED 5
+#define LED 13
+#define LEDR 5
 #define BUTTON 19
 #define STRB_PIN 24
 #define RS_PIN   25
@@ -120,8 +120,16 @@ void pinMode(volatile uint32_t *gpio , int pin ,int state) {
       , [shift] "r" (shift)
       : "r0", "r1", "r2", "cc");
 }    
+/*a function that takes the pointer to the location wherewe have mapped 
+ * our gpio register layout, ourpin number for which the value has to be
+ *  set and the value */
 void digitalWrite(volatile uint32_t *gpio, int pin, int theValue) {
   
+  /*checks whether pin lies in SET1/CLR1 or SET2/CLR2 register and this is done using the
+  information that a register can hold values for 32 register only so if the pin is more
+  than 31 it choose SET2/CLR2 depending if the value to be set is 1 or 0 if o then clr is
+  choosen else SET */
+
 	int off;
 	
 	if(pin > 31) {
@@ -131,11 +139,11 @@ void digitalWrite(volatile uint32_t *gpio, int pin, int theValue) {
 	}    
 	asm volatile (	     
 		"\tLDR R0, %[gpio]\n"
-		"\tADD R0, R0, %[off]\n"   // replace with off
+		"\tADD R0, R0, %[off]\n"   //loads memloc in register
 		"\tMOV R2, #1\n"
 		"\tMOV R1, %[act]\n"
-		"\tAND R1, #31\n"     
-		"\tLSL R2, R1\n"
+		"\tAND R1, #31\n"          //puts 1 by using function LSL that shifts  
+		"\tLSL R2, R1\n"           // it left to that many times depending on the pin number
 		"\tSTR R2, [R0, #0]\n"
 		: 
 		: [gpio] "m" (gpio)
@@ -144,7 +152,8 @@ void digitalWrite(volatile uint32_t *gpio, int pin, int theValue) {
 		: "r0", "r1", "r2", "cc");
 
 }
-
+/*this function is used to read the value at the selected pin and return the value that
+it reads if there is any kind of input it returns an integer other than 0*/
 int readPin(volatile uint32_t *gpio, int pin) {
 	
 	int off=0,res=0;
@@ -154,6 +163,10 @@ int readPin(volatile uint32_t *gpio, int pin) {
 	} else {
 		off = 13;
 	}  
+  /*arm function that gets the data from either lev1 or lev2
+  once data is loaded we and it with 1 which left shifted
+  by the number of pin. AND is used to convert any number
+  31 to a number smaller than that and once we get the value it returns it*/
 	asm volatile (	     
 		"\tLDR R0, %[gpio]\n"
 		"\tADD R0, R0, %[off]\n"
@@ -261,9 +274,6 @@ void sendDataCmd (const struct lcdDataStruct *lcd, unsigned char data)
 
 void lcdPutCommand (const struct lcdDataStruct *lcd, unsigned char command)
 {
-#ifdef DEBUG
- // fprintf(stderr, "lcdPutCommand: digitalWrite(%d,%d) and sendDataCmd(%d,%d)\n", lcd->rsPin,   0, lcd, command);
-#endif
   digitalWrite (gpio, lcd->rsPin,   0) ;
   sendDataCmd  (lcd, command) ;
   delay (2) ;
@@ -379,6 +389,8 @@ void bling (int pin, int count) {
   }
 }
 
+/*this function takes the length of the sequence and the highest possible
+number that could be read using the button. */
 int *input(int length, int numRange) {
   
   int pinLED = LED, pinButton = BUTTON,pinLEDR = LEDR;
@@ -386,10 +398,18 @@ int *input(int length, int numRange) {
   int y,x,j;
   int *guess = malloc(length * sizeof(int));
 
+  /*a loop that stores the user input into the guess array
+  and starts a timer this timer runs depending on the range
+  the longer the range the longer the timer will run for
+  */
   for(x=0; x<length; x++){
     int count=0,prev=0;
     time_t startT = time(NULL);
-    
+    /*here we initialise prev and count. prev stores if the previous inout was
+    high or low. in every loop the current value is compared with previous
+    value and if they are different then value is checked if it 1 or 0 and depencding
+    on that we increment our count. The inner loop is to to go over and over again the
+    input value to check if its changed or not*/
     while((time(NULL)-startT) < numRange*1.5) {
       int curr=0;
       for (j=0; j<numRange*2; j++) {
@@ -397,7 +417,7 @@ int *input(int length, int numRange) {
             curr=1;
             if(prev != curr){
               prev=1;
-            
+            //breaks if input number greater than range
             if(count >= numRange) {
               count=numRange;
               break;
@@ -412,10 +432,11 @@ int *input(int length, int numRange) {
       }
     }
     guess[x] = count;
-    bling(LED,1);
-    bling(LEDR,count);
-}
-    bling(LED,2);
+    bling(LED, 1); //red light blinks to insure every number
+    bling(LEDR, count); //green blinks to represent the input number
+  }
+  
+  bling(LED,2);
   return guess;
 }
 /*
@@ -426,7 +447,7 @@ int *input(int length, int numRange) {
  * means the number of input values which are in secret sequence but not
  * in the right order.
  */
-int *compare(int * secret, int *userInput, int length) {
+int *compare(int *secret, int *userInput, int length) {
 
   static int result[3];
   int correctNumber = 0, positionMatch = 0;
@@ -505,12 +526,26 @@ char *intToString(int value) {
   return tempString;
 }
 
+void debugMode(int count, int *userInput, int length, int positionMatch, int correctMatch) {
+  
+  int x;
+  printf("Guess %d: ", count);
+  
+  for(x = 0; x < length; x++) {
+    if(x == length-1) {
+      printf("%d\n", userInput[x]);
+    } else {
+      printf("%d ", userInput[x]);
+    }
+  }
+  
+  printf("Answer:  %d %d\n", positionMatch, correctMatch);
+}
 /* Main ----------------------------------------------------------------------------- */
 int main (int argc, char **argv)
 {
   int pinLED = LED, pinButton = BUTTON,pinLEDR = LEDR;
   int fSel, shift, pin,  clrOff, setOff, off, fd,j;
-  int theValue, thePin;
   unsigned int howLong = DELAY;
   uint32_t res;
   
@@ -644,19 +679,19 @@ int main (int argc, char **argv)
   while (success != 1) {
     
     lcdClear(lcd);
-    lcdPosition (lcd, 0, 0) ; lcdPuts (lcd, "Starting") ;
+    lcdPosition (lcd, 0, 0) ; lcdPuts (lcd, "Round Started") ;
+    lcdPosition (lcd, 0, 1) ; lcdPuts (lcd, "Press The Button") ;
     
     // Process the user input and store it here.
     int *userInput = input(length, numRange);
 
-    char resultStringTop[13] = "";
+    char resultStringTop[13] = "Guess ";
     tries++;
     
     // Compile the string for the top line of LCD 
     int *result = compare(secret, userInput, length);
     
     // Compile the first line of game to be displayed on LCD
-    strcat(resultStringTop, "Guess ");
     strcat(resultStringTop, intToString(tries));
     strcat(resultStringTop, ": ");
     strcat(resultStringTop, intToString(result[1]));
@@ -675,6 +710,9 @@ int main (int argc, char **argv)
     
     // If user guessed the sequence correctly
     if(result[0] == 1) {
+      if(argc == 2 && argv[1][0] == 'd') {
+        debugMode(tries, userInput, length, result[1], result[2]);
+      }
       // Display the success message
       success = 1;
       lcdClear(lcd);
@@ -695,7 +733,13 @@ int main (int argc, char **argv)
       digitalWrite(gpio, LED, 1);
       bling(LEDR, 3);
       digitalWrite(gpio, LED, 0);
+      
+      free(resultStringBottom);
+      free(userInput);
       break;
+    }
+    if(argc == 2 && argv[1][0] == 'd') {
+      debugMode(tries, userInput, length, result[1], result[2]);
     }
     // If the user guess is wrong, update the LCD output and blink LED
     lcdClear(lcd);
@@ -704,7 +748,12 @@ int main (int argc, char **argv)
     delay(3000);
 
     bling(LED,3);
+    delay(1000);
+    
   }
+  
+  free(lcd);
+  
 }
 
 
